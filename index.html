@@ -169,5 +169,12 @@
     </div>
 
     <script src="app.js"></script>
+    <button id="testButton" style="position: fixed; bottom: 10px; right: 10px; z-index: 1000;">Test JavaScript</button>
+    <script>
+        document.getElementById('testButton').addEventListener('click', function() {
+            alert('JavaScript is working!');
+            console.log('Test button clicked');
+        });
+    </script>
 </body>
 </html>
