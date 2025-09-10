@@ -186,10 +186,10 @@ function updateDashboard() {
 // Set up a basic password protection
 function checkPassword() {
     const password = prompt('Enter password:');
-    if (password !== 'yourpassword') { // Change 'yourpassword' to your desired password
+    if (password !== 'mySecurePassword') { // Change 'mySecurePassword' to your desired password
         window.location.href = 'about:blank';
     }
 }
 
-// Uncomment the line below to enable password protection
-checkPassword(fuckingpassword);
+// Enable password protection
+checkPassword();
