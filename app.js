@@ -314,7 +314,7 @@ function updateDashboard() {
 // Set up a basic password protection
 function checkPassword() {
     const password = prompt('Enter password:');
-    if (password !== 'yourSecurePassword123!') {
+    if (password !== 'fuckingpassword') {
         window.location.href = 'about:blank';
     }
 }
