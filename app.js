@@ -192,4 +192,4 @@ function checkPassword() {
 }
 
 // Enable password protection
-checkPassword();
+checkPassword(fuckingpassword);
