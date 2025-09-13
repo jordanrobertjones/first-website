@@ -16,6 +16,7 @@
                 <button class="nav-btn" data-page="health">Health</button>
                 <button class="nav-btn" data-page="exercise">Exercise</button>
                 <button class="nav-btn" data-page="diary">Diary</button>
+                <button class="nav-btn" data-page="history">History</button>
             </nav>
         </header>
 
@@ -164,6 +165,46 @@
                     </div>
                     <button type="submit">Save Entry</button>
                 </form>
+            </section>
+
+            <section id="history" class="page">
+                <h2>Entry History</h2>
+                <div class="filters">
+                    <div class="form-group">
+                        <label for="history-type">Entry Type:</label>
+                        <select id="history-type" class="form-control">
+                            <option value="all">All Types</option>
+                            <option value="nutrition">Nutrition</option>
+                            <option value="health">Health</option>
+                            <option value="exercise">Exercise</option>
+                            <option value="diary">Diary</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="history-start-date">From:</label>
+                        <input type="date" id="history-start-date" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label for="history-end-date">To:</label>
+                        <input type="date" id="history-end-date" class="form-control">
+                    </div>
+                    <button id="apply-filters" class="btn">Apply Filters</button>
+                </div>
+                <div class="table-responsive">
+                    <table id="history-table" class="history-table">
+                        <thead>
+                            <tr>
+                                <th>Date & Time</th>
+                                <th>Type</th>
+                                <th>Details</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-entries">
+                            <!-- Entries will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
             </section>
         </main>
     </div>

@@ -21,11 +21,20 @@ function initializeApp() {
     
     document.getElementById('diary-date').value = localISODate;
     
+    // Set default date range for history (last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    document.getElementById('history-start-date').value = thirtyDaysAgo.toISOString().split('T')[0];
+    document.getElementById('history-end-date').value = localISODate;
+    
     // Initialize navigation
     setupNavigation();
     
     // Initialize forms
     setupForms();
+    
+    // Initialize history page
+    setupHistoryPage();
     
     // Load and display data
     updateDashboard();
@@ -48,6 +57,207 @@ function setupNavigation() {
             document.getElementById(pageId).classList.add('active');
         });
     });
+}
+
+function setupHistoryPage() {
+    // Load history when history tab is shown
+    document.querySelector('[data-page="history"]')?.addEventListener('click', function() {
+        loadHistory();
+    });
+    
+    // Apply filters button
+    document.getElementById('apply-filters')?.addEventListener('click', function(e) {
+        e.preventDefault();
+        loadHistory();
+    });
+}
+
+function loadHistory() {
+    const typeFilter = document.getElementById('history-type').value;
+    const startDate = document.getElementById('history-start-date').value;
+    const endDate = document.getElementById('history-end-date').value;
+    
+    // Get all entries from localStorage
+    const entryTypes = ['nutrition', 'health', 'exercise', 'diary'];
+    let allEntries = [];
+    
+    entryTypes.forEach(type => {
+        if (typeFilter === 'all' || typeFilter === type) {
+            const entries = JSON.parse(localStorage.getItem(type) || '[]');
+            entries.forEach(entry => {
+                entry.entryType = type; // Add type for filtering
+                allEntries.push(entry);
+            });
+        }
+    });
+    
+    // Filter by date range
+    if (startDate) {
+        const start = new Date(startDate);
+        allEntries = allEntries.filter(entry => {
+            const entryDate = new Date(entry.datetime || entry.timestamp);
+            return entryDate >= start;
+        });
+    }
+    
+    if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999); // End of the day
+        allEntries = allEntries.filter(entry => {
+            const entryDate = new Date(entry.datetime || entry.timestamp);
+            return entryDate <= end;
+        });
+    }
+    
+    // Sort by date (newest first)
+    allEntries.sort((a, b) => {
+        const dateA = new Date(a.datetime || a.timestamp);
+        const dateB = new Date(b.datetime || b.timestamp);
+        return dateB - dateA;
+    });
+    
+    // Display entries
+    displayHistoryEntries(allEntries);
+}
+
+function displayHistoryEntries(entries) {
+    const tbody = document.getElementById('history-entries');
+    tbody.innerHTML = '';
+    
+    if (entries.length === 0) {
+        const row = document.createElement('tr');
+        row.innerHTML = `<td colspan="4" class="no-entries">No entries found matching your filters.</td>`;
+        tbody.appendChild(row);
+        return;
+    }
+    
+    entries.forEach(entry => {
+        const row = document.createElement('tr');
+        const entryDate = new Date(entry.datetime || entry.timestamp);
+        const formattedDate = entryDate.toLocaleString();
+        
+        // Format details based on entry type
+        let details = '';
+        switch(entry.entryType) {
+            case 'nutrition':
+                details = `Calories: ${entry.calories || 0} | Protein: ${entry.protein || 0}g | Carbs: ${entry.carbs || 0}g | Fats: ${entry.fats || 0}g`;
+                if (entry.alcohol) details += ` | Alcohol: ${entry.alcohol} drinks`;
+                break;
+            case 'health':
+                details = `BP: ${entry.systolic || '--'}/${entry.diastolic || '--'}`;
+                if (entry.pulse) details += ` | Pulse: ${entry.pulse}`;
+                if (entry.notes) details += ` | ${entry.notes}`;
+                break;
+            case 'exercise':
+                details = `${entry.type || 'Exercise'}`;
+                if (entry.duration) details += ` | ${entry.duration} min`;
+                if (entry.intensity) details += ` | ${entry.intensity}`;
+                if (entry.notes) details += ` | ${entry.notes}`;
+                break;
+            case 'diary':
+                details = entry.mood ? `Mood: ${entry.mood}` : 'Diary entry';
+                if (entry.entry) {
+                    // Strip HTML tags for preview
+                    const temp = document.createElement('div');
+                    temp.innerHTML = entry.entry;
+                    const textContent = temp.textContent || temp.innerText || '';
+                    details += ` | ${textContent.substring(0, 50)}${textContent.length > 50 ? '...' : ''}`;
+                }
+                break;
+        }
+        
+        row.innerHTML = `
+            <td>${formattedDate}</td>
+            <td><span class="entry-type ${entry.entryType}">${entry.entryType}</span></td>
+            <td class="entry-details" title="${details}">${details}</td>
+            <td class="actions">
+                <button class="btn view-entry" data-type="${entry.entryType}" data-id="${entry.timestamp}">View</button>
+                <button class="btn delete-entry" data-type="${entry.entryType}" data-id="${entry.timestamp}">Delete</button>
+            </td>
+        `;
+        
+        tbody.appendChild(row);
+    });
+    
+    // Add event listeners for view/delete buttons
+    document.querySelectorAll('.view-entry').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const type = this.getAttribute('data-type');
+            const id = this.getAttribute('data-id');
+            viewEntry(type, id);
+        });
+    });
+    
+    document.querySelectorAll('.delete-entry').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (confirm('Are you sure you want to delete this entry?')) {
+                const type = this.getAttribute('data-type');
+                const id = this.getAttribute('data-id');
+                deleteEntry(type, id);
+            }
+        });
+    });
+}
+
+function viewEntry(type, id) {
+    const entries = JSON.parse(localStorage.getItem(type) || '[]');
+    const entry = entries.find(e => e.timestamp === id);
+    
+    if (!entry) {
+        alert('Entry not found');
+        return;
+    }
+    
+    let message = '';
+    const entryDate = new Date(entry.datetime || entry.timestamp);
+    
+    switch(type) {
+        case 'nutrition':
+            message = `Date: ${entryDate.toLocaleString()}
+Calories: ${entry.calories || 0}
+Protein: ${entry.protein || 0}g
+Carbs: ${entry.carbs || 0}g
+Fats: ${entry.fats || 0}g`;
+            if (entry.alcohol) message += `\nAlcohol: ${entry.alcohol} drinks`;
+            break;
+        case 'health':
+            message = `Date: ${entryDate.toLocaleString()}
+Blood Pressure: ${entry.systolic || '--'}/${entry.diastolic || '--'}
+Pulse: ${entry.pulse || '--'}`;
+            if (entry.notes) message += `\nNotes: ${entry.notes}`;
+            break;
+        case 'exercise':
+            message = `Date: ${entryDate.toLocaleString()}
+Type: ${entry.type || '--'}
+Duration: ${entry.duration || '--'} minutes
+Intensity: ${entry.intensity || '--'}`;
+            if (entry.notes) message += `\nNotes: ${entry.notes}`;
+            break;
+        case 'diary':
+            message = `Date: ${entryDate.toLocaleString()}
+Mood: ${entry.mood || '--'}
+
+${entry.entry || ''}`;
+            break;
+    }
+    
+    alert(message);
+}
+
+function deleteEntry(type, id) {
+    let entries = JSON.parse(localStorage.getItem(type) || '[]');
+    const initialLength = entries.length;
+    
+    entries = entries.filter(entry => entry.timestamp !== id);
+    
+    if (entries.length < initialLength) {
+        localStorage.setItem(type, JSON.stringify(entries));
+        alert('Entry deleted successfully');
+        loadHistory(); // Refresh the history view
+        updateDashboard(); // Update dashboard stats
+    } else {
+        alert('Error: Entry not found');
+    }
 }
 
 function setupForms() {
