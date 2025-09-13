@@ -38,6 +38,12 @@ function initializeApp() {
     
     // Load and display data
     updateDashboard();
+    
+    // Update charts when dashboard tab is clicked
+    document.querySelector('[data-page="dashboard"]').addEventListener('click', function() {
+        // Small delay to ensure the tab is visible before rendering charts
+        setTimeout(updateCharts, 100);
+    });
 }
 
 function setupNavigation() {
@@ -428,6 +434,331 @@ function saveEntry(type, data) {
     }
 }
 
+// Chart instances
+let charts = {
+    caloriesChart: null,
+    bpChart: null,
+    exerciseChart: null,
+    moodChart: null
+};
+
+function getLastNDays(n) {
+    const result = [];
+    for (let i = n - 1; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        result.push(d.toISOString().split('T')[0]);
+    }
+    return result;
+}
+
+function getDataForDate(entries, date) {
+    return entries.filter(entry => {
+        const entryDate = entry.datetime ? entry.datetime.split('T')[0] : '';
+        return entryDate === date;
+    });
+}
+
+function createCaloriesChart(labels, data) {
+    const ctx = document.getElementById('caloriesChart').getContext('2d');
+    if (charts.caloriesChart) {
+        charts.caloriesChart.destroy();
+    }
+    
+    charts.caloriesChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Calories',
+                data: data,
+                borderColor: '#ff4d00',
+                backgroundColor: 'rgba(255, 77, 0, 0.1)',
+                tension: 0.3,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    },
+                    ticks: {
+                        color: '#a0a0a0'
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        color: '#a0a0a0'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function createBPChart(labels, systolicData, diastolicData) {
+    const ctx = document.getElementById('bpChart').getContext('2d');
+    if (charts.bpChart) {
+        charts.bpChart.destroy();
+    }
+    
+    charts.bpChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Systolic',
+                    data: systolicData,
+                    borderColor: '#ff4d00',
+                    backgroundColor: 'transparent',
+                    tension: 0.3
+                },
+                {
+                    label: 'Diastolic',
+                    data: diastolicData,
+                    borderColor: '#4d9eff',
+                    backgroundColor: 'transparent',
+                    tension: 0.3
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: {
+                        color: '#a0a0a0'
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    },
+                    ticks: {
+                        color: '#a0a0a0'
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        color: '#a0a0a0'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function createExerciseChart(labels, data) {
+    const ctx = document.getElementById('exerciseChart').getContext('2d');
+    if (charts.exerciseChart) {
+        charts.exerciseChart.destroy();
+    }
+    
+    charts.exerciseChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Minutes',
+                data: data,
+                backgroundColor: 'rgba(255, 77, 0, 0.7)',
+                borderColor: '#ff4d00',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    },
+                    ticks: {
+                        color: '#a0a0a0'
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        color: '#a0a0a0'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function createMoodChart(labels, data) {
+    const moodValues = {
+        '😊': 5,
+        '🙂': 4,
+        '😐': 3,
+        '🙁': 2,
+        '😞': 1
+    };
+    
+    const moodData = data.map(mood => moodValues[mood] || 0);
+    
+    const ctx = document.getElementById('moodChart').getContext('2d');
+    if (charts.moodChart) {
+        charts.moodChart.destroy();
+    }
+    
+    charts.moodChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Mood',
+                data: moodData,
+                borderColor: '#ff4d00',
+                backgroundColor: 'transparent',
+                tension: 0.3,
+                pointBackgroundColor: '#ff4d00',
+                pointRadius: 5,
+                pointHoverRadius: 7
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const moodIndex = moodData[context.dataIndex];
+                            const moodText = Object.keys(moodValues).find(key => moodValues[key] === moodIndex);
+                            return `Mood: ${moodText || 'N/A'}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    min: 0,
+                    max: 6,
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    },
+                    ticks: {
+                        color: '#a0a0a0',
+                        callback: function(value) {
+                            const moodMap = {
+                                1: '😞',
+                                2: '🙁',
+                                3: '😐',
+                                4: '🙂',
+                                5: '😊'
+                            };
+                            return moodMap[value] || '';
+                        }
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        color: '#a0a0a0'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function updateCharts() {
+    const days = 7;
+    const dateLabels = getLastNDays(days);
+    
+    // Nutrition data
+    const nutritionEntries = JSON.parse(localStorage.getItem('nutrition') || '[]');
+    const caloriesData = dateLabels.map(date => {
+        const dayEntries = getDataForDate(nutritionEntries, date);
+        return dayEntries.reduce((sum, entry) => sum + (parseInt(entry.calories) || 0), 0);
+    });
+    createCaloriesChart(dateLabels, caloriesData);
+    
+    // Blood pressure data
+    const healthEntries = JSON.parse(localStorage.getItem('health') || '[]');
+    const systolicData = [];
+    const diastolicData = [];
+    
+    dateLabels.forEach(date => {
+        const dayEntries = getDataForDate(healthEntries, date);
+        if (dayEntries.length > 0) {
+            const lastEntry = dayEntries[dayEntries.length - 1];
+            systolicData.push(parseInt(lastEntry.systolic) || null);
+            diastolicData.push(parseInt(lastEntry.diastolic) || null);
+        } else {
+            systolicData.push(null);
+            diastolicData.push(null);
+        }
+    });
+    createBPChart(dateLabels, systolicData, diastolicData);
+    
+    // Exercise data
+    const exerciseEntries = JSON.parse(localStorage.getItem('exercise') || '[]');
+    const exerciseData = dateLabels.map(date => {
+        const dayEntries = getDataForDate(exerciseEntries, date);
+        return dayEntries.reduce((sum, entry) => sum + (parseInt(entry.duration) || 0), 0);
+    });
+    createExerciseChart(dateLabels, exerciseData);
+    
+    // Mood data
+    const diaryEntries = JSON.parse(localStorage.getItem('diary') || '[]');
+    const moodData = [];
+    const moodMap = {};
+    
+    // Create a map of dates to moods
+    diaryEntries.forEach(entry => {
+        if (entry.mood) {
+            const date = entry.datetime ? entry.datetime.split('T')[0] : '';
+            moodMap[date] = entry.mood;
+        }
+    });
+    
+    // Get mood for each date in the range
+    dateLabels.forEach(date => {
+        moodData.push(moodMap[date] || null);
+    });
+    
+    createMoodChart(dateLabels, moodData);
+}
+
 function updateDashboard() {
     // Update nutrition stats
     const nutritionEntries = JSON.parse(localStorage.getItem('nutrition') || '[]');
@@ -519,6 +850,9 @@ function updateDashboard() {
             moodStats.innerHTML = '<p>No entries yet</p>';
         }
     }
+    
+    // Update all charts
+    updateCharts();
 }
 
 // Set up a basic password protection

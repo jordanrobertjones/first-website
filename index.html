@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Personal Metrics Tracker</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div class="container">
@@ -39,6 +40,24 @@
                     <div class="stat-card">
                         <h3>Mood</h3>
                         <div id="mood-stats">Loading...</div>
+                    </div>
+                </div>
+                <div class="graph-container">
+                    <div class="graph-card">
+                        <h3>Calories Trend (Last 7 Days)</h3>
+                        <canvas id="caloriesChart"></canvas>
+                    </div>
+                    <div class="graph-card">
+                        <h3>Blood Pressure Trend (Last 7 Days)</h3>
+                        <canvas id="bpChart"></canvas>
+                    </div>
+                    <div class="graph-card">
+                        <h3>Exercise Duration (Last 7 Days)</h3>
+                        <canvas id="exerciseChart"></canvas>
+                    </div>
+                    <div class="graph-card">
+                        <h3>Mood Trend (Last 7 Days)</h3>
+                        <canvas id="moodChart"></canvas>
                     </div>
                 </div>
             </section>
