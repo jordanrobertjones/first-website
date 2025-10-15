@@ -285,24 +285,44 @@ function setupForms() {
     // Health form
     document.getElementById('health-form')?.addEventListener('submit', function(e) {
         e.preventDefault();
-        console.log('Health form submitted');
+        console.log('=== HEALTH FORM SUBMITTED ===');
+        
+        const datetime = document.getElementById('health-datetime').value;
+        const systolic = document.getElementById('systolic').value;
+        const diastolic = document.getElementById('diastolic').value;
+        const pulse = document.getElementById('pulse').value;
+        const notes = document.getElementById('health-notes').value;
+        
+        console.log('Health form data:', {
+            datetime: datetime,
+            systolic: systolic,
+            diastolic: diastolic,
+            pulse: pulse,
+            notes: notes
+        });
         
         const saved = saveEntry('health', {
-            datetime: document.getElementById('health-datetime').value,
-            systolic: document.getElementById('systolic').value,
-            diastolic: document.getElementById('diastolic').value,
-            pulse: document.getElementById('pulse').value,
-            notes: document.getElementById('health-notes').value
+            datetime: datetime,
+            systolic: systolic,
+            diastolic: diastolic,
+            pulse: pulse,
+            notes: notes
         });
         
         if (saved) {
             alert('Health entry saved!');
+            console.log('Health entry saved successfully');
             this.reset();
             const now = new Date();
             const timezoneOffset = now.getTimezoneOffset() * 60000;
             const localISOTime = (new Date(now - timezoneOffset)).toISOString().slice(0, 16);
             document.getElementById('health-datetime').value = localISOTime;
+            
+            console.log('Calling updateDashboard...');
             updateDashboard();
+            console.log('Dashboard update completed');
+        } else {
+            console.error('Failed to save health entry');
         }
     });
     
@@ -748,10 +768,18 @@ function updateCharts() {
 }
 
 function updateDashboard() {
+    console.log('=== UPDATING DASHBOARD ===');
+    const today = new Date().toISOString().split('T')[0];
+    console.log('Today\'s date:', today);
+    
     // Update nutrition stats
     const nutritionEntries = JSON.parse(localStorage.getItem('nutrition') || '[]');
-    const today = new Date().toISOString().split('T')[0];
-    const todayNutrition = nutritionEntries.filter(entry => entry.datetime && entry.datetime.startsWith(today));
+    console.log('Total nutrition entries:', nutritionEntries.length);
+    const todayNutrition = nutritionEntries.filter(entry => {
+        const entryDate = entry.datetime ? entry.datetime.split('T')[0] : '';
+        return entryDate === today;
+    });
+    console.log('Today\'s nutrition entries:', todayNutrition.length);
     
     let totalCalories = 0;
     let totalProtein = 0;
@@ -777,17 +805,27 @@ function updateDashboard() {
     
     // Update blood pressure stats
     const bpEntries = JSON.parse(localStorage.getItem('health') || '[]');
-    const todayBP = bpEntries.filter(entry => entry.datetime && entry.datetime.startsWith(today));
+    console.log('Total health entries:', bpEntries.length);
+    console.log('All health entries:', bpEntries);
+    
+    const todayBP = bpEntries.filter(entry => {
+        const entryDate = entry.datetime ? entry.datetime.split('T')[0] : '';
+        console.log('Checking BP entry date:', entryDate, 'against today:', today);
+        return entryDate === today;
+    });
+    console.log('Today\'s BP entries:', todayBP.length, todayBP);
     
     const bpStats = document.getElementById('bp-stats');
     if (bpStats) {
         if (todayBP.length > 0) {
             const latestBP = todayBP[todayBP.length - 1];
+            console.log('Latest BP reading:', latestBP);
             bpStats.innerHTML = `
                 <p>${latestBP.systolic}/${latestBP.diastolic}</p>
                 <p>Pulse: ${latestBP.pulse}</p>
             `;
         } else {
+            console.log('No BP readings for today');
             bpStats.innerHTML = '<p>No readings today</p>';
         }
     }
