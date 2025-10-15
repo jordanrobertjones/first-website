@@ -41,7 +41,6 @@ function initializeApp() {
     
     // Update charts when dashboard tab is clicked
     document.querySelector('[data-page="dashboard"]').addEventListener('click', function() {
-        // Small delay to ensure the tab is visible before rendering charts
         setTimeout(updateCharts, 100);
     });
 }
@@ -51,14 +50,11 @@ function setupNavigation() {
     
     navButtons.forEach(button => {
         button.addEventListener('click', function() {
-            // Remove active class from all buttons and pages
             document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
             document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
             
-            // Add active class to clicked button
             this.classList.add('active');
             
-            // Show corresponding page
             const pageId = this.getAttribute('data-page');
             document.getElementById(pageId).classList.add('active');
         });
@@ -66,12 +62,10 @@ function setupNavigation() {
 }
 
 function setupHistoryPage() {
-    // Load history when history tab is shown
     document.querySelector('[data-page="history"]')?.addEventListener('click', function() {
         loadHistory();
     });
     
-    // Apply filters button
     document.getElementById('apply-filters')?.addEventListener('click', function(e) {
         e.preventDefault();
         loadHistory();
@@ -83,7 +77,6 @@ function loadHistory() {
     const startDate = document.getElementById('history-start-date').value;
     const endDate = document.getElementById('history-end-date').value;
     
-    // Get all entries from localStorage
     const entryTypes = ['nutrition', 'health', 'exercise', 'diary'];
     let allEntries = [];
     
@@ -91,13 +84,12 @@ function loadHistory() {
         if (typeFilter === 'all' || typeFilter === type) {
             const entries = JSON.parse(localStorage.getItem(type) || '[]');
             entries.forEach(entry => {
-                entry.entryType = type; // Add type for filtering
+                entry.entryType = type;
                 allEntries.push(entry);
             });
         }
     });
     
-    // Filter by date range
     if (startDate) {
         const start = new Date(startDate);
         allEntries = allEntries.filter(entry => {
@@ -108,21 +100,19 @@ function loadHistory() {
     
     if (endDate) {
         const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999); // End of the day
+        end.setHours(23, 59, 59, 999);
         allEntries = allEntries.filter(entry => {
             const entryDate = new Date(entry.datetime || entry.timestamp);
             return entryDate <= end;
         });
     }
     
-    // Sort by date (newest first)
     allEntries.sort((a, b) => {
         const dateA = new Date(a.datetime || a.timestamp);
         const dateB = new Date(b.datetime || b.timestamp);
         return dateB - dateA;
     });
     
-    // Display entries
     displayHistoryEntries(allEntries);
 }
 
@@ -142,7 +132,6 @@ function displayHistoryEntries(entries) {
         const entryDate = new Date(entry.datetime || entry.timestamp);
         const formattedDate = entryDate.toLocaleString();
         
-        // Format details based on entry type
         let details = '';
         switch(entry.entryType) {
             case 'nutrition':
@@ -163,7 +152,6 @@ function displayHistoryEntries(entries) {
             case 'diary':
                 details = entry.mood ? `Mood: ${entry.mood}` : 'Diary entry';
                 if (entry.entry) {
-                    // Strip HTML tags for preview
                     const temp = document.createElement('div');
                     temp.innerHTML = entry.entry;
                     const textContent = temp.textContent || temp.innerText || '';
@@ -185,7 +173,6 @@ function displayHistoryEntries(entries) {
         tbody.appendChild(row);
     });
     
-    // Add event listeners for view/delete buttons
     document.querySelectorAll('.view-entry').forEach(btn => {
         btn.addEventListener('click', function() {
             const type = this.getAttribute('data-type');
@@ -259,8 +246,8 @@ function deleteEntry(type, id) {
     if (entries.length < initialLength) {
         localStorage.setItem(type, JSON.stringify(entries));
         alert('Entry deleted successfully');
-        loadHistory(); // Refresh the history view
-        updateDashboard(); // Update dashboard stats
+        loadHistory();
+        updateDashboard();
     } else {
         alert('Error: Entry not found');
     }
@@ -269,14 +256,12 @@ function deleteEntry(type, id) {
 function setupForms() {
     console.log('Setting up forms...');
     
-    // Check if diary form exists
-    const diaryForm = document.getElementById('diary-form');
-    console.log('Diary form element:', diaryForm);
-    
     // Nutrition form
     document.getElementById('nutrition-form')?.addEventListener('submit', function(e) {
         e.preventDefault();
-        saveEntry('nutrition', {
+        console.log('Nutrition form submitted');
+        
+        const saved = saveEntry('nutrition', {
             datetime: document.getElementById('nutrition-datetime').value,
             calories: document.getElementById('calories').value,
             protein: document.getElementById('protein').value,
@@ -284,112 +269,114 @@ function setupForms() {
             fats: document.getElementById('fats').value,
             alcohol: document.getElementById('alcohol').value
         });
-        this.reset();
-        updateDashboard();
+        
+        if (saved) {
+            alert('Nutrition entry saved!');
+            this.reset();
+            // Reset datetime to current
+            const now = new Date();
+            const timezoneOffset = now.getTimezoneOffset() * 60000;
+            const localISOTime = (new Date(now - timezoneOffset)).toISOString().slice(0, 16);
+            document.getElementById('nutrition-datetime').value = localISOTime;
+            updateDashboard();
+        }
     });
     
     // Health form
     document.getElementById('health-form')?.addEventListener('submit', function(e) {
         e.preventDefault();
-        saveEntry('health', {
+        console.log('Health form submitted');
+        
+        const saved = saveEntry('health', {
             datetime: document.getElementById('health-datetime').value,
             systolic: document.getElementById('systolic').value,
             diastolic: document.getElementById('diastolic').value,
             pulse: document.getElementById('pulse').value,
             notes: document.getElementById('health-notes').value
         });
-        this.reset();
-        updateDashboard();
+        
+        if (saved) {
+            alert('Health entry saved!');
+            this.reset();
+            const now = new Date();
+            const timezoneOffset = now.getTimezoneOffset() * 60000;
+            const localISOTime = (new Date(now - timezoneOffset)).toISOString().slice(0, 16);
+            document.getElementById('health-datetime').value = localISOTime;
+            updateDashboard();
+        }
     });
     
     // Exercise form
     document.getElementById('exercise-form')?.addEventListener('submit', function(e) {
         e.preventDefault();
-        saveEntry('exercise', {
+        console.log('Exercise form submitted');
+        
+        const saved = saveEntry('exercise', {
             datetime: document.getElementById('exercise-datetime').value,
             type: document.getElementById('exercise-type').value,
             duration: document.getElementById('duration').value,
             intensity: document.getElementById('intensity').value,
             notes: document.getElementById('exercise-notes').value
         });
-        this.reset();
-        updateDashboard();
+        
+        if (saved) {
+            alert('Exercise entry saved!');
+            this.reset();
+            const now = new Date();
+            const timezoneOffset = now.getTimezoneOffset() * 60000;
+            const localISOTime = (new Date(now - timezoneOffset)).toISOString().slice(0, 16);
+            document.getElementById('exercise-datetime').value = localISOTime;
+            updateDashboard();
+        }
     });
     
-    // Diary form submit handler
-    console.log('Setting up diary form submit handler...');
-    if (!diaryForm) {
-        console.error('Diary form not found!');
-    } else {
-        console.log('Found diary form, adding submit event listener...');
+    // Diary form
+    const diaryForm = document.getElementById('diary-form');
+    if (diaryForm) {
+        console.log('Setting up diary form...');
         diaryForm.addEventListener('submit', function(e) {
-            console.log('=== Form Submission Started ===');
-            console.log('Form submit event triggered');
-            console.log('Form element:', this);
-            console.log('Form elements:', this.elements);
-        e.preventDefault();
-        const dateInput = document.getElementById('diary-date');
-        const moodInput = document.getElementById('mood');
-        const entryContent = document.getElementById('diary-entry').innerHTML;
-        
-        // Format the date to YYYY-MM-DD format
-        let formattedDate = '';
-        let displayDate = '';
-        
-        if (dateInput.value) {
-            // Convert date input to YYYY-MM-DD format
-            const date = new Date(dateInput.value);
-            formattedDate = date.toISOString().split('T')[0] + 'T00:00';
-            displayDate = date.toISOString().split('T')[0];
-        } else {
-            const today = new Date();
-            formattedDate = today.toISOString().split('T')[0] + 'T00:00';
-            displayDate = today.toISOString().split('T')[0];
-        }
-        
-        try {
-            console.log('=== Form Data ===');
-            console.log('Date input value:', dateInput ? dateInput.value : 'dateInput is null');
-            console.log('Mood input value:', moodInput ? moodInput.value : 'moodInput is null');
-            console.log('Entry content:', entryContent);
+            e.preventDefault();
+            console.log('Diary form submitted');
             
-            if (!dateInput || !moodInput) {
-                throw new Error('Required form elements not found');
+            const dateInput = document.getElementById('diary-date');
+            const moodInput = document.getElementById('mood');
+            const entryContent = document.getElementById('diary-entry').innerHTML;
+            
+            if (!dateInput.value) {
+                alert('Please select a date');
+                return;
             }
             
-            console.log('Attempting to save diary entry...');
+            // Create datetime from date input
+            const selectedDate = new Date(dateInput.value + 'T12:00:00');
+            const datetime = selectedDate.toISOString();
+            const dateOnly = dateInput.value; // Already in YYYY-MM-DD format
             
-            const entryData = {
-                datetime: formattedDate,
-                date: displayDate,  // This will be in YYYY-MM-DD format
+            console.log('Diary data:', {
+                datetime: datetime,
+                date: dateOnly,
                 mood: moodInput.value,
-                entry: entryContent,
-                timestamp: new Date().toISOString()
-            };
+                entry: entryContent
+            });
             
-            console.log('Saving entry data:', entryData);
-            saveEntry('diary', entryData);
+            const saved = saveEntry('diary', {
+                datetime: datetime,
+                date: dateOnly,
+                mood: moodInput.value,
+                entry: entryContent
+            });
             
-            // Verify the entry was saved
-            const savedEntries = JSON.parse(localStorage.getItem('diary') || '[]');
-            console.log('All saved entries after save:', savedEntries);
-            
-            if (savedEntries.some(entry => entry.timestamp === entryData.timestamp)) {
-                console.log('Diary entry saved successfully!');
-                alert('Entry saved successfully!');
-            } else {
-                throw new Error('Entry was not saved to localStorage');
+            if (saved) {
+                alert('Diary entry saved!');
+                this.reset();
+                document.getElementById('diary-entry').innerHTML = '';
+                // Reset date to today
+                const today = new Date();
+                const localISODate = today.toISOString().split('T')[0];
+                document.getElementById('diary-date').value = localISODate;
+                updateDashboard();
             }
-        } catch (error) {
-            console.error('Error saving diary entry:', error);
-        }
-        
-            this.reset();
-            document.getElementById('diary-entry').innerHTML = '';
-            updateDashboard();
         });
-        
-        console.log('Diary form submit handler attached successfully');
     }
     
     // Text formatting for diary
@@ -404,14 +391,15 @@ function setupForms() {
 
 function saveEntry(type, data) {
     try {
-        console.log('Saving entry type:', type);
-        console.log('Entry data:', data);
+        console.log('=== SAVING ENTRY ===');
+        console.log('Type:', type);
+        console.log('Data:', data);
         
-        // Get existing entries or initialize empty array
+        // Get existing entries
         const entries = JSON.parse(localStorage.getItem(type) || '[]');
-        console.log('Existing entries:', entries);
+        console.log('Existing entries:', entries.length);
         
-        // Add new entry with timestamp if not already present
+        // Add timestamp if not present
         if (!data.timestamp) {
             data.timestamp = new Date().toISOString();
         }
@@ -419,17 +407,19 @@ function saveEntry(type, data) {
         // Add the new entry
         entries.push(data);
         
-        // Save back to localStorage
+        // Save to localStorage
         localStorage.setItem(type, JSON.stringify(entries));
-        console.log('Successfully saved entry. Total entries:', entries.length);
+        console.log('Saved! Total entries now:', entries.length);
         
-        // Verify the save worked
+        // Verify
         const verify = JSON.parse(localStorage.getItem(type) || '[]');
-        console.log('Verify save - last entry:', verify[verify.length - 1]);
+        console.log('Verification - entries in storage:', verify.length);
+        console.log('Last saved entry:', verify[verify.length - 1]);
         
         return true;
     } catch (error) {
-        console.error('Error in saveEntry:', error);
+        console.error('ERROR saving entry:', error);
+        alert('Error saving entry: ' + error.message);
         return false;
     }
 }
@@ -743,15 +733,13 @@ function updateCharts() {
     const moodData = [];
     const moodMap = {};
     
-    // Create a map of dates to moods
     diaryEntries.forEach(entry => {
         if (entry.mood) {
-            const date = entry.datetime ? entry.datetime.split('T')[0] : '';
+            const date = entry.date || (entry.datetime ? entry.datetime.split('T')[0] : '');
             moodMap[date] = entry.mood;
         }
     });
     
-    // Get mood for each date in the range
     dateLabels.forEach(date => {
         moodData.push(moodMap[date] || null);
     });
@@ -792,12 +780,16 @@ function updateDashboard() {
     const todayBP = bpEntries.filter(entry => entry.datetime && entry.datetime.startsWith(today));
     
     const bpStats = document.getElementById('bp-stats');
-    if (bpStats && todayBP.length > 0) {
-        const latestBP = todayBP[todayBP.length - 1];
-        bpStats.innerHTML = `
-            <p>${latestBP.systolic}/${latestBP.diastolic}</p>
-            <p>Pulse: ${latestBP.pulse}</p>
-        `;
+    if (bpStats) {
+        if (todayBP.length > 0) {
+            const latestBP = todayBP[todayBP.length - 1];
+            bpStats.innerHTML = `
+                <p>${latestBP.systolic}/${latestBP.diastolic}</p>
+                <p>Pulse: ${latestBP.pulse}</p>
+            `;
+        } else {
+            bpStats.innerHTML = '<p>No readings today</p>';
+        }
     }
     
     // Update exercise stats
@@ -812,56 +804,46 @@ function updateDashboard() {
     }
     
     // Update mood stats
-    console.log('=== Updating Mood Stats ===');
     const diaryEntries = JSON.parse(localStorage.getItem('diary') || '[]');
-    console.log('All diary entries:', diaryEntries);
-    
-    // Sort entries by timestamp in descending order (newest first)
     const sortedEntries = [...diaryEntries].sort((a, b) => 
         new Date(b.timestamp) - new Date(a.timestamp)
     );
     
-    // Try to find today's entry
     const todayDiary = sortedEntries.find(entry => {
         const entryDate = entry.date || (entry.datetime ? entry.datetime.split('T')[0] : null);
-        console.log(`Checking entry date: ${entryDate} against today: ${today}`);
         return entryDate === today;
     });
-    
-    console.log('Most recent diary entry:', sortedEntries[0]);
-    console.log('Today\'s diary entry:', todayDiary);
     
     const moodStats = document.getElementById('mood-stats');
     if (moodStats) {
         if (todayDiary) {
-            console.log('Displaying mood:', todayDiary.mood);
             moodStats.innerHTML = `
                 <p>Mood: ${todayDiary.mood || 'N/A'}</p>
                 <p>${todayDiary.entry ? 'Entry saved' : 'No entry content'}</p>
             `;
         } else if (sortedEntries.length > 0) {
-            console.log('No entry for today, showing most recent entry');
+            const lastEntry = sortedEntries[0];
+            const lastDate = new Date(lastEntry.timestamp);
             moodStats.innerHTML = `
-                <p>Last mood: ${sortedEntries[0].mood || 'N/A'}</p>
-                <p>Last entry: ${new Date(sortedEntries[0].timestamp).toLocaleDateString()}</p>
+                <p>Last mood: ${lastEntry.mood || 'N/A'}</p>
+                <p>${lastDate.toLocaleDateString()}</p>
             `;
         } else {
-            console.log('No diary entries found');
             moodStats.innerHTML = '<p>No entries yet</p>';
         }
     }
     
-    // Update all charts
     updateCharts();
 }
 
-// Set up a basic password protection
+// OPTIONAL: Password protection (commented out by default)
+// Uncomment the lines below if you want password protection
+/*
 function checkPassword() {
     const password = prompt('Enter password:');
-    if (password !== 'fuckingpassword') {
+    if (password !== 'your_password_here') {
         window.location.href = 'about:blank';
     }
 }
-
-// Enable password protection
 checkPassword();
+*/
