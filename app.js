@@ -22,6 +22,31 @@ if (!userId) {
 
 console.log('Firebase initialized. User ID:', userId);
 
+// Helper function to get local date string (YYYY-MM-DD) accounting for timezone
+function getLocalDateString(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+// Helper function to get local datetime string for datetime-local input
+function getLocalDateTimeString(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+// Helper function to extract date from datetime string
+function extractDate(datetimeString) {
+    if (!datetimeString) return '';
+    // Handle both "YYYY-MM-DDTHH:mm" format and ISO format
+    return datetimeString.split('T')[0];
+}
+
 // Initialize the application when the DOM is fully loaded
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM fully loaded, initializing app...');
@@ -31,9 +56,8 @@ document.addEventListener('DOMContentLoaded', function() {
 function initializeApp() {
     // Set current date and time in date/time fields
     const now = new Date();
-    const timezoneOffset = now.getTimezoneOffset() * 60000;
-    const localISOTime = (new Date(now - timezoneOffset)).toISOString().slice(0, 16);
-    const localISODate = (new Date(now - timezoneOffset)).toISOString().split('T')[0];
+    const localISOTime = getLocalDateTimeString(now);
+    const localISODate = getLocalDateString(now);
     
     // Set current date/time in forms
     document.querySelectorAll('input[type="datetime-local"]').forEach(input => {
@@ -45,7 +69,7 @@ function initializeApp() {
     // Set default date range for history (last 30 days)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    document.getElementById('history-start-date').value = thirtyDaysAgo.toISOString().split('T')[0];
+    document.getElementById('history-start-date').value = getLocalDateString(thirtyDaysAgo);
     document.getElementById('history-end-date').value = localISODate;
     
     // Initialize navigation
@@ -310,10 +334,7 @@ function setupForms() {
         if (saved) {
             alert('Nutrition entry saved!');
             this.reset();
-            const now = new Date();
-            const timezoneOffset = now.getTimezoneOffset() * 60000;
-            const localISOTime = (new Date(now - timezoneOffset)).toISOString().slice(0, 16);
-            document.getElementById('nutrition-datetime').value = localISOTime;
+            document.getElementById('nutrition-datetime').value = getLocalDateTimeString();
         }
     });
     
@@ -348,10 +369,7 @@ function setupForms() {
             alert('Health entry saved and syncing!');
             console.log('Health entry saved successfully');
             this.reset();
-            const now = new Date();
-            const timezoneOffset = now.getTimezoneOffset() * 60000;
-            const localISOTime = (new Date(now - timezoneOffset)).toISOString().slice(0, 16);
-            document.getElementById('health-datetime').value = localISOTime;
+            document.getElementById('health-datetime').value = getLocalDateTimeString();
         } else {
             console.error('Failed to save health entry');
         }
@@ -373,10 +391,7 @@ function setupForms() {
         if (saved) {
             alert('Exercise entry saved!');
             this.reset();
-            const now = new Date();
-            const timezoneOffset = now.getTimezoneOffset() * 60000;
-            const localISOTime = (new Date(now - timezoneOffset)).toISOString().slice(0, 16);
-            document.getElementById('exercise-datetime').value = localISOTime;
+            document.getElementById('exercise-datetime').value = getLocalDateTimeString();
         }
     });
     
@@ -412,9 +427,7 @@ function setupForms() {
                 alert('Diary entry saved!');
                 this.reset();
                 document.getElementById('diary-entry').innerHTML = '';
-                const today = new Date();
-                const localISODate = today.toISOString().split('T')[0];
-                document.getElementById('diary-date').value = localISODate;
+                document.getElementById('diary-date').value = getLocalDateString();
             }
         });
     }
@@ -464,14 +477,14 @@ function getLastNDays(n) {
     for (let i = n - 1; i >= 0; i--) {
         const d = new Date();
         d.setDate(d.getDate() - i);
-        result.push(d.toISOString().split('T')[0]);
+        result.push(getLocalDateString(d));
     }
     return result;
 }
 
 function getDataForDate(entries, date) {
     return entries.filter(entry => {
-        const entryDate = entry.datetime ? entry.datetime.split('T')[0] : '';
+        const entryDate = extractDate(entry.datetime);
         return entryDate === date;
     });
 }
@@ -761,114 +774,12 @@ async function updateCharts() {
     const exerciseSnapshot = await db.collection('exercise')
         .where('userId', '==', userId)
         .get();
-    const exerciseEntries = [];
-    exerciseSnapshot.forEach(doc => exerciseEntries.push(doc.data()));
-    
-    const exerciseData = dateLabels.map(date => {
-        const dayEntries = getDataForDate(exerciseEntries, date);
-        return dayEntries.reduce((sum, entry) => sum + (parseInt(entry.duration) || 0), 0);
-    });
-    createExerciseChart(dateLabels, exerciseData);
-    
-    // Get diary data from Firebase
-    const diarySnapshot = await db.collection('diary')
-        .where('userId', '==', userId)
-        .get();
-    const diaryEntries = [];
-    diarySnapshot.forEach(doc => diaryEntries.push(doc.data()));
-    
-    const moodData = [];
-    const moodMap = {};
-    
-    diaryEntries.forEach(entry => {
-        if (entry.mood) {
-            const date = entry.date || (entry.datetime ? entry.datetime.split('T')[0] : '');
-            moodMap[date] = entry.mood;
-        }
-    });
-    
-    dateLabels.forEach(date => {
-        moodData.push(moodMap[date] || null);
-    });
-    
-    createMoodChart(dateLabels, moodData);
-}
-
-async function updateDashboard() {
-    console.log('=== UPDATING DASHBOARD ===');
-    const today = new Date().toISOString().split('T')[0];
-    console.log('Today\'s date:', today);
-    
-    // Get nutrition data from Firebase
-    const nutritionSnapshot = await db.collection('nutrition')
-        .where('userId', '==', userId)
-        .get();
-    
-    let totalCalories = 0;
-    let totalProtein = 0;
-    let totalCarbs = 0;
-    let totalFats = 0;
-    
-    nutritionSnapshot.forEach(doc => {
-        const entry = doc.data();
-        const entryDate = entry.datetime ? entry.datetime.split('T')[0] : '';
-        if (entryDate === today) {
-            totalCalories += parseInt(entry.calories || 0);
-            totalProtein += parseInt(entry.protein || 0);
-            totalCarbs += parseInt(entry.carbs || 0);
-            totalFats += parseInt(entry.fats || 0);
-        }
-    });
-    
-    const macroStats = document.getElementById('macro-stats');
-    if (macroStats) {
-        macroStats.innerHTML = `
-            <p>Calories: ${totalCalories}</p>
-            <p>Protein: ${totalProtein}g</p>
-            <p>Carbs: ${totalCarbs}g</p>
-            <p>Fats: ${totalFats}g</p>
-        `;
-    }
-    
-    // Get blood pressure data from Firebase
-    const bpSnapshot = await db.collection('health')
-        .where('userId', '==', userId)
-        .get();
-    
-    let latestBP = null;
-    
-    bpSnapshot.forEach(doc => {
-        const entry = doc.data();
-        const entryDate = entry.datetime ? entry.datetime.split('T')[0] : '';
-        if (entryDate === today) {
-            latestBP = entry;
-        }
-    });
-    
-    console.log('Latest BP reading for today:', latestBP);
-    
-    const bpStats = document.getElementById('bp-stats');
-    if (bpStats) {
-        if (latestBP) {
-            bpStats.innerHTML = `
-                <p>${latestBP.systolic}/${latestBP.diastolic}</p>
-                <p>Pulse: ${latestBP.pulse}</p>
-            `;
-        } else {
-            bpStats.innerHTML = '<p>No readings today</p>';
-        }
-    }
-    
-    // Get exercise data from Firebase
-    const exerciseSnapshot = await db.collection('exercise')
-        .where('userId', '==', userId)
-        .get();
     
     let exerciseCount = 0;
     
     exerciseSnapshot.forEach(doc => {
         const entry = doc.data();
-        const entryDate = entry.datetime ? entry.datetime.split('T')[0] : '';
+        const entryDate = extractDate(entry.datetime);
         if (entryDate === today) {
             exerciseCount++;
         }
@@ -891,7 +802,7 @@ async function updateDashboard() {
     
     diarySnapshot.forEach(doc => {
         const entry = doc.data();
-        const entryDate = entry.date || (entry.datetime ? entry.datetime.split('T')[0] : null);
+        const entryDate = entry.date || extractDate(entry.datetime);
         
         if (entryDate === today) {
             todayDiary = entry;
@@ -921,4 +832,128 @@ async function updateDashboard() {
     }
     
     updateCharts();
+} Firebase
+    const exerciseSnapshot = await db.collection('exercise')
+        .where('userId', '==', userId)
+        .get();
+    const exerciseEntries = [];
+    exerciseSnapshot.forEach(doc => exerciseEntries.push(doc.data()));
+    
+    const exerciseData = dateLabels.map(date => {
+        const dayEntries = getDataForDate(exerciseEntries, date);
+        return dayEntries.reduce((sum, entry) => sum + (parseInt(entry.duration) || 0), 0);
+    });
+    createExerciseChart(dateLabels, exerciseData);
+    
+    // Get diary data from Firebase
+    const diarySnapshot = await db.collection('diary')
+        .where('userId', '==', userId)
+        .get();
+    const diaryEntries = [];
+    diarySnapshot.forEach(doc => diaryEntries.push(doc.data()));
+    
+    const moodData = [];
+    const moodMap = {};
+    
+    diaryEntries.forEach(entry => {
+        if (entry.mood) {
+            const date = entry.date || extractDate(entry.datetime);
+            moodMap[date] = entry.mood;
+        }
+    });
+    
+    dateLabels.forEach(date => {
+        moodData.push(moodMap[date] || null);
+    });
+    
+    createMoodChart(dateLabels, moodData);
 }
+
+async function updateDashboard() {
+    console.log('=== UPDATING DASHBOARD ===');
+    const today = getLocalDateString();
+    console.log('Today\'s date (local):', today);
+    
+    // Get nutrition data from Firebase
+    const nutritionSnapshot = await db.collection('nutrition')
+        .where('userId', '==', userId)
+        .get();
+    
+    let totalCalories = 0;
+    let totalProtein = 0;
+    let totalCarbs = 0;
+    let totalFats = 0;
+    
+    nutritionSnapshot.forEach(doc => {
+        const entry = doc.data();
+        const entryDate = extractDate(entry.datetime);
+        if (entryDate === today) {
+            totalCalories += parseInt(entry.calories || 0);
+            totalProtein += parseInt(entry.protein || 0);
+            totalCarbs += parseInt(entry.carbs || 0);
+            totalFats += parseInt(entry.fats || 0);
+        }
+    });
+    
+    const macroStats = document.getElementById('macro-stats');
+    if (macroStats) {
+        macroStats.innerHTML = `
+            <p>Calories: ${totalCalories}</p>
+            <p>Protein: ${totalProtein}g</p>
+            <p>Carbs: ${totalCarbs}g</p>
+            <p>Fats: ${totalFats}g</p>
+        `;
+    }
+    
+    // Get blood pressure data from Firebase - FIXED VERSION
+    const bpSnapshot = await db.collection('health')
+        .where('userId', '==', userId)
+        .get();
+    
+    let todayBP = null;
+    let latestBP = null;
+    let latestTimestamp = null;
+    
+    bpSnapshot.forEach(doc => {
+        const entry = doc.data();
+        const entryDate = extractDate(entry.datetime);
+        const timestamp = new Date(entry.datetime || entry.timestamp);
+        
+        // Check if entry is from today
+        if (entryDate === today) {
+            todayBP = entry;
+        }
+        
+        // Track the most recent entry overall
+        if (!latestTimestamp || timestamp > latestTimestamp) {
+            latestBP = entry;
+            latestTimestamp = timestamp;
+        }
+    });
+    
+    console.log('Today BP:', todayBP);
+    console.log('Latest BP:', latestBP);
+    
+    const bpStats = document.getElementById('bp-stats');
+    if (bpStats) {
+        if (todayBP) {
+            // Show today's reading
+            bpStats.innerHTML = `
+                <p>${todayBP.systolic}/${todayBP.diastolic}</p>
+                <p>Pulse: ${todayBP.pulse || '--'}</p>
+            `;
+        } else if (latestBP) {
+            // Show most recent reading with date
+            const latestDate = new Date(latestBP.datetime || latestBP.timestamp);
+            const dateStr = latestDate.toLocaleDateString();
+            bpStats.innerHTML = `
+                <p>${latestBP.systolic}/${latestBP.diastolic}</p>
+                <p>Pulse: ${latestBP.pulse || '--'}</p>
+                <p class="reading-date">Last reading: ${dateStr}</p>
+            `;
+        } else {
+            bpStats.innerHTML = '<p>No readings yet</p>';
+        }
+    }
+    
+    // Get exercise data from
