@@ -1,5 +1,26 @@
-// Debug: Check if script is loaded
-console.log('app.js loaded');
+// Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyAApzVL1VKaurTa--cy8TM_vx7b1Hc2Lss",
+  authDomain: "personal-metrics-tracker.firebaseapp.com",
+  projectId: "personal-metrics-tracker",
+  storageBucket: "personal-metrics-tracker.firebasestorage.app",
+  messagingSenderId: "98508924201",
+  appId: "1:98508924201:web:08fab1c57685cbab474338",
+  measurementId: "G-PFEHG9Y0KH"
+};
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// User ID for this device (generates once and stores locally)
+let userId = localStorage.getItem('userId');
+if (!userId) {
+    userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    localStorage.setItem('userId', userId);
+}
+
+console.log('Firebase initialized. User ID:', userId);
 
 // Initialize the application when the DOM is fully loaded
 document.addEventListener('DOMContentLoaded', function() {
@@ -43,6 +64,21 @@ function initializeApp() {
     document.querySelector('[data-page="dashboard"]').addEventListener('click', function() {
         setTimeout(updateCharts, 100);
     });
+    
+    // Set up real-time listeners for data changes
+    setupRealtimeListeners();
+}
+
+function setupRealtimeListeners() {
+    // Listen for changes to all entry types
+    ['nutrition', 'health', 'exercise', 'diary'].forEach(type => {
+        db.collection(type)
+            .where('userId', '==', userId)
+            .onSnapshot((snapshot) => {
+                console.log(`Real-time update: ${type} changed`);
+                updateDashboard();
+            });
+    });
 }
 
 function setupNavigation() {
@@ -72,24 +108,28 @@ function setupHistoryPage() {
     });
 }
 
-function loadHistory() {
+async function loadHistory() {
     const typeFilter = document.getElementById('history-type').value;
     const startDate = document.getElementById('history-start-date').value;
     const endDate = document.getElementById('history-end-date').value;
     
-    const entryTypes = ['nutrition', 'health', 'exercise', 'diary'];
+    const entryTypes = typeFilter === 'all' ? ['nutrition', 'health', 'exercise', 'diary'] : [typeFilter];
     let allEntries = [];
     
-    entryTypes.forEach(type => {
-        if (typeFilter === 'all' || typeFilter === type) {
-            const entries = JSON.parse(localStorage.getItem(type) || '[]');
-            entries.forEach(entry => {
-                entry.entryType = type;
-                allEntries.push(entry);
-            });
-        }
-    });
+    for (const type of entryTypes) {
+        const snapshot = await db.collection(type)
+            .where('userId', '==', userId)
+            .get();
+        
+        snapshot.forEach(doc => {
+            const entry = doc.data();
+            entry.id = doc.id;
+            entry.entryType = type;
+            allEntries.push(entry);
+        });
+    }
     
+    // Filter by date range
     if (startDate) {
         const start = new Date(startDate);
         allEntries = allEntries.filter(entry => {
@@ -107,6 +147,7 @@ function loadHistory() {
         });
     }
     
+    // Sort by date (newest first)
     allEntries.sort((a, b) => {
         const dateA = new Date(a.datetime || a.timestamp);
         const dateB = new Date(b.datetime || b.timestamp);
@@ -165,8 +206,8 @@ function displayHistoryEntries(entries) {
             <td><span class="entry-type ${entry.entryType}">${entry.entryType}</span></td>
             <td class="entry-details" title="${details}">${details}</td>
             <td class="actions">
-                <button class="btn view-entry" data-type="${entry.entryType}" data-id="${entry.timestamp}">View</button>
-                <button class="btn delete-entry" data-type="${entry.entryType}" data-id="${entry.timestamp}">Delete</button>
+                <button class="btn view-entry" data-type="${entry.entryType}" data-id="${entry.id}">View</button>
+                <button class="btn delete-entry" data-type="${entry.entryType}" data-id="${entry.id}">Delete</button>
             </td>
         `;
         
@@ -192,15 +233,15 @@ function displayHistoryEntries(entries) {
     });
 }
 
-function viewEntry(type, id) {
-    const entries = JSON.parse(localStorage.getItem(type) || '[]');
-    const entry = entries.find(e => e.timestamp === id);
+async function viewEntry(type, id) {
+    const doc = await db.collection(type).doc(id).get();
     
-    if (!entry) {
+    if (!doc.exists) {
         alert('Entry not found');
         return;
     }
     
+    const entry = doc.data();
     let message = '';
     const entryDate = new Date(entry.datetime || entry.timestamp);
     
@@ -237,19 +278,15 @@ ${entry.entry || ''}`;
     alert(message);
 }
 
-function deleteEntry(type, id) {
-    let entries = JSON.parse(localStorage.getItem(type) || '[]');
-    const initialLength = entries.length;
-    
-    entries = entries.filter(entry => entry.timestamp !== id);
-    
-    if (entries.length < initialLength) {
-        localStorage.setItem(type, JSON.stringify(entries));
+async function deleteEntry(type, id) {
+    try {
+        await db.collection(type).doc(id).delete();
         alert('Entry deleted successfully');
         loadHistory();
         updateDashboard();
-    } else {
-        alert('Error: Entry not found');
+    } catch (error) {
+        console.error('Error deleting entry:', error);
+        alert('Error deleting entry: ' + error.message);
     }
 }
 
@@ -257,11 +294,11 @@ function setupForms() {
     console.log('Setting up forms...');
     
     // Nutrition form
-    document.getElementById('nutrition-form')?.addEventListener('submit', function(e) {
+    document.getElementById('nutrition-form')?.addEventListener('submit', async function(e) {
         e.preventDefault();
         console.log('Nutrition form submitted');
         
-        const saved = saveEntry('nutrition', {
+        const saved = await saveEntry('nutrition', {
             datetime: document.getElementById('nutrition-datetime').value,
             calories: document.getElementById('calories').value,
             protein: document.getElementById('protein').value,
@@ -273,17 +310,15 @@ function setupForms() {
         if (saved) {
             alert('Nutrition entry saved!');
             this.reset();
-            // Reset datetime to current
             const now = new Date();
             const timezoneOffset = now.getTimezoneOffset() * 60000;
             const localISOTime = (new Date(now - timezoneOffset)).toISOString().slice(0, 16);
             document.getElementById('nutrition-datetime').value = localISOTime;
-            updateDashboard();
         }
     });
     
     // Health form
-    document.getElementById('health-form')?.addEventListener('submit', function(e) {
+    document.getElementById('health-form')?.addEventListener('submit', async function(e) {
         e.preventDefault();
         console.log('=== HEALTH FORM SUBMITTED ===');
         
@@ -301,7 +336,7 @@ function setupForms() {
             notes: notes
         });
         
-        const saved = saveEntry('health', {
+        const saved = await saveEntry('health', {
             datetime: datetime,
             systolic: systolic,
             diastolic: diastolic,
@@ -310,28 +345,24 @@ function setupForms() {
         });
         
         if (saved) {
-            alert('Health entry saved!');
+            alert('Health entry saved and syncing!');
             console.log('Health entry saved successfully');
             this.reset();
             const now = new Date();
             const timezoneOffset = now.getTimezoneOffset() * 60000;
             const localISOTime = (new Date(now - timezoneOffset)).toISOString().slice(0, 16);
             document.getElementById('health-datetime').value = localISOTime;
-            
-            console.log('Calling updateDashboard...');
-            updateDashboard();
-            console.log('Dashboard update completed');
         } else {
             console.error('Failed to save health entry');
         }
     });
     
     // Exercise form
-    document.getElementById('exercise-form')?.addEventListener('submit', function(e) {
+    document.getElementById('exercise-form')?.addEventListener('submit', async function(e) {
         e.preventDefault();
         console.log('Exercise form submitted');
         
-        const saved = saveEntry('exercise', {
+        const saved = await saveEntry('exercise', {
             datetime: document.getElementById('exercise-datetime').value,
             type: document.getElementById('exercise-type').value,
             duration: document.getElementById('duration').value,
@@ -346,7 +377,6 @@ function setupForms() {
             const timezoneOffset = now.getTimezoneOffset() * 60000;
             const localISOTime = (new Date(now - timezoneOffset)).toISOString().slice(0, 16);
             document.getElementById('exercise-datetime').value = localISOTime;
-            updateDashboard();
         }
     });
     
@@ -354,7 +384,7 @@ function setupForms() {
     const diaryForm = document.getElementById('diary-form');
     if (diaryForm) {
         console.log('Setting up diary form...');
-        diaryForm.addEventListener('submit', function(e) {
+        diaryForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             console.log('Diary form submitted');
             
@@ -367,19 +397,11 @@ function setupForms() {
                 return;
             }
             
-            // Create datetime from date input
             const selectedDate = new Date(dateInput.value + 'T12:00:00');
             const datetime = selectedDate.toISOString();
-            const dateOnly = dateInput.value; // Already in YYYY-MM-DD format
+            const dateOnly = dateInput.value;
             
-            console.log('Diary data:', {
-                datetime: datetime,
-                date: dateOnly,
-                mood: moodInput.value,
-                entry: entryContent
-            });
-            
-            const saved = saveEntry('diary', {
+            const saved = await saveEntry('diary', {
                 datetime: datetime,
                 date: dateOnly,
                 mood: moodInput.value,
@@ -390,11 +412,9 @@ function setupForms() {
                 alert('Diary entry saved!');
                 this.reset();
                 document.getElementById('diary-entry').innerHTML = '';
-                // Reset date to today
                 const today = new Date();
                 const localISODate = today.toISOString().split('T')[0];
                 document.getElementById('diary-date').value = localISODate;
-                updateDashboard();
             }
         });
     }
@@ -409,36 +429,23 @@ function setupForms() {
     });
 }
 
-function saveEntry(type, data) {
+async function saveEntry(type, data) {
     try {
-        console.log('=== SAVING ENTRY ===');
+        console.log('=== SAVING TO FIREBASE ===');
         console.log('Type:', type);
         console.log('Data:', data);
         
-        // Get existing entries
-        const entries = JSON.parse(localStorage.getItem(type) || '[]');
-        console.log('Existing entries:', entries.length);
+        // Add metadata
+        data.userId = userId;
+        data.timestamp = new Date().toISOString();
         
-        // Add timestamp if not present
-        if (!data.timestamp) {
-            data.timestamp = new Date().toISOString();
-        }
-        
-        // Add the new entry
-        entries.push(data);
-        
-        // Save to localStorage
-        localStorage.setItem(type, JSON.stringify(entries));
-        console.log('Saved! Total entries now:', entries.length);
-        
-        // Verify
-        const verify = JSON.parse(localStorage.getItem(type) || '[]');
-        console.log('Verification - entries in storage:', verify.length);
-        console.log('Last saved entry:', verify[verify.length - 1]);
+        // Save to Firestore
+        const docRef = await db.collection(type).add(data);
+        console.log('Saved to Firebase with ID:', docRef.id);
         
         return true;
     } catch (error) {
-        console.error('ERROR saving entry:', error);
+        console.error('ERROR saving to Firebase:', error);
         alert('Error saving entry: ' + error.message);
         return false;
     }
@@ -710,20 +717,30 @@ function createMoodChart(labels, data) {
     });
 }
 
-function updateCharts() {
+async function updateCharts() {
     const days = 7;
     const dateLabels = getLastNDays(days);
     
-    // Nutrition data
-    const nutritionEntries = JSON.parse(localStorage.getItem('nutrition') || '[]');
+    // Get nutrition data from Firebase
+    const nutritionSnapshot = await db.collection('nutrition')
+        .where('userId', '==', userId)
+        .get();
+    const nutritionEntries = [];
+    nutritionSnapshot.forEach(doc => nutritionEntries.push(doc.data()));
+    
     const caloriesData = dateLabels.map(date => {
         const dayEntries = getDataForDate(nutritionEntries, date);
         return dayEntries.reduce((sum, entry) => sum + (parseInt(entry.calories) || 0), 0);
     });
     createCaloriesChart(dateLabels, caloriesData);
     
-    // Blood pressure data
-    const healthEntries = JSON.parse(localStorage.getItem('health') || '[]');
+    // Get health data from Firebase
+    const healthSnapshot = await db.collection('health')
+        .where('userId', '==', userId)
+        .get();
+    const healthEntries = [];
+    healthSnapshot.forEach(doc => healthEntries.push(doc.data()));
+    
     const systolicData = [];
     const diastolicData = [];
     
@@ -740,16 +757,26 @@ function updateCharts() {
     });
     createBPChart(dateLabels, systolicData, diastolicData);
     
-    // Exercise data
-    const exerciseEntries = JSON.parse(localStorage.getItem('exercise') || '[]');
+    // Get exercise data from Firebase
+    const exerciseSnapshot = await db.collection('exercise')
+        .where('userId', '==', userId)
+        .get();
+    const exerciseEntries = [];
+    exerciseSnapshot.forEach(doc => exerciseEntries.push(doc.data()));
+    
     const exerciseData = dateLabels.map(date => {
         const dayEntries = getDataForDate(exerciseEntries, date);
         return dayEntries.reduce((sum, entry) => sum + (parseInt(entry.duration) || 0), 0);
     });
     createExerciseChart(dateLabels, exerciseData);
     
-    // Mood data
-    const diaryEntries = JSON.parse(localStorage.getItem('diary') || '[]');
+    // Get diary data from Firebase
+    const diarySnapshot = await db.collection('diary')
+        .where('userId', '==', userId)
+        .get();
+    const diaryEntries = [];
+    diarySnapshot.forEach(doc => diaryEntries.push(doc.data()));
+    
     const moodData = [];
     const moodMap = {};
     
@@ -767,30 +794,30 @@ function updateCharts() {
     createMoodChart(dateLabels, moodData);
 }
 
-function updateDashboard() {
+async function updateDashboard() {
     console.log('=== UPDATING DASHBOARD ===');
     const today = new Date().toISOString().split('T')[0];
     console.log('Today\'s date:', today);
     
-    // Update nutrition stats
-    const nutritionEntries = JSON.parse(localStorage.getItem('nutrition') || '[]');
-    console.log('Total nutrition entries:', nutritionEntries.length);
-    const todayNutrition = nutritionEntries.filter(entry => {
-        const entryDate = entry.datetime ? entry.datetime.split('T')[0] : '';
-        return entryDate === today;
-    });
-    console.log('Today\'s nutrition entries:', todayNutrition.length);
+    // Get nutrition data from Firebase
+    const nutritionSnapshot = await db.collection('nutrition')
+        .where('userId', '==', userId)
+        .get();
     
     let totalCalories = 0;
     let totalProtein = 0;
     let totalCarbs = 0;
     let totalFats = 0;
     
-    todayNutrition.forEach(entry => {
-        totalCalories += parseInt(entry.calories || 0);
-        totalProtein += parseInt(entry.protein || 0);
-        totalCarbs += parseInt(entry.carbs || 0);
-        totalFats += parseInt(entry.fats || 0);
+    nutritionSnapshot.forEach(doc => {
+        const entry = doc.data();
+        const entryDate = entry.datetime ? entry.datetime.split('T')[0] : '';
+        if (entryDate === today) {
+            totalCalories += parseInt(entry.calories || 0);
+            totalProtein += parseInt(entry.protein || 0);
+            totalCarbs += parseInt(entry.carbs || 0);
+            totalFats += parseInt(entry.fats || 0);
+        }
     });
     
     const macroStats = document.getElementById('macro-stats');
@@ -803,53 +830,76 @@ function updateDashboard() {
         `;
     }
     
-    // Update blood pressure stats
-    const bpEntries = JSON.parse(localStorage.getItem('health') || '[]');
-    console.log('Total health entries:', bpEntries.length);
-    console.log('All health entries:', bpEntries);
+    // Get blood pressure data from Firebase
+    const bpSnapshot = await db.collection('health')
+        .where('userId', '==', userId)
+        .get();
     
-    const todayBP = bpEntries.filter(entry => {
+    let latestBP = null;
+    
+    bpSnapshot.forEach(doc => {
+        const entry = doc.data();
         const entryDate = entry.datetime ? entry.datetime.split('T')[0] : '';
-        console.log('Checking BP entry date:', entryDate, 'against today:', today);
-        return entryDate === today;
+        if (entryDate === today) {
+            latestBP = entry;
+        }
     });
-    console.log('Today\'s BP entries:', todayBP.length, todayBP);
+    
+    console.log('Latest BP reading for today:', latestBP);
     
     const bpStats = document.getElementById('bp-stats');
     if (bpStats) {
-        if (todayBP.length > 0) {
-            const latestBP = todayBP[todayBP.length - 1];
-            console.log('Latest BP reading:', latestBP);
+        if (latestBP) {
             bpStats.innerHTML = `
                 <p>${latestBP.systolic}/${latestBP.diastolic}</p>
                 <p>Pulse: ${latestBP.pulse}</p>
             `;
         } else {
-            console.log('No BP readings for today');
             bpStats.innerHTML = '<p>No readings today</p>';
         }
     }
     
-    // Update exercise stats
-    const exerciseEntries = JSON.parse(localStorage.getItem('exercise') || '[]');
-    const todayExercises = exerciseEntries.filter(entry => entry.datetime && entry.datetime.startsWith(today));
+    // Get exercise data from Firebase
+    const exerciseSnapshot = await db.collection('exercise')
+        .where('userId', '==', userId)
+        .get();
+    
+    let exerciseCount = 0;
+    
+    exerciseSnapshot.forEach(doc => {
+        const entry = doc.data();
+        const entryDate = entry.datetime ? entry.datetime.split('T')[0] : '';
+        if (entryDate === today) {
+            exerciseCount++;
+        }
+    });
     
     const exerciseStats = document.getElementById('exercise-stats');
     if (exerciseStats) {
-        exerciseStats.innerHTML = todayExercises.length > 0 
-            ? `<p>${todayExercises.length} activities logged</p>`
+        exerciseStats.innerHTML = exerciseCount > 0 
+            ? `<p>${exerciseCount} activities logged</p>`
             : '<p>No exercises today</p>';
     }
     
-    // Update mood stats
-    const diaryEntries = JSON.parse(localStorage.getItem('diary') || '[]');
-    const sortedEntries = [...diaryEntries].sort((a, b) => 
-        new Date(b.timestamp) - new Date(a.timestamp)
-    );
+    // Get diary data from Firebase
+    const diarySnapshot = await db.collection('diary')
+        .where('userId', '==', userId)
+        .get();
     
-    const todayDiary = sortedEntries.find(entry => {
+    let todayDiary = null;
+    let latestDiary = null;
+    
+    diarySnapshot.forEach(doc => {
+        const entry = doc.data();
         const entryDate = entry.date || (entry.datetime ? entry.datetime.split('T')[0] : null);
-        return entryDate === today;
+        
+        if (entryDate === today) {
+            todayDiary = entry;
+        }
+        
+        if (!latestDiary || new Date(entry.timestamp) > new Date(latestDiary.timestamp)) {
+            latestDiary = entry;
+        }
     });
     
     const moodStats = document.getElementById('mood-stats');
@@ -859,11 +909,10 @@ function updateDashboard() {
                 <p>Mood: ${todayDiary.mood || 'N/A'}</p>
                 <p>${todayDiary.entry ? 'Entry saved' : 'No entry content'}</p>
             `;
-        } else if (sortedEntries.length > 0) {
-            const lastEntry = sortedEntries[0];
-            const lastDate = new Date(lastEntry.timestamp);
+        } else if (latestDiary) {
+            const lastDate = new Date(latestDiary.timestamp);
             moodStats.innerHTML = `
-                <p>Last mood: ${lastEntry.mood || 'N/A'}</p>
+                <p>Last mood: ${latestDiary.mood || 'N/A'}</p>
                 <p>${lastDate.toLocaleDateString()}</p>
             `;
         } else {
@@ -873,15 +922,3 @@ function updateDashboard() {
     
     updateCharts();
 }
-
-// OPTIONAL: Password protection (commented out by default)
-// Uncomment the lines below if you want password protection
-/*
-function checkPassword() {
-    const password = prompt('Enter password:');
-    if (password !== 'your_password_here') {
-        window.location.href = 'about:blank';
-    }
-}
-checkPassword();
-*/
